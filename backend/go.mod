@@ -1,4 +1,4 @@
-module pearsonspecterlitt.com/integration-gateway
+module github.com/mohsinian/integration-gateway
 
 go 1.26
 

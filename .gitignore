@@ -1,6 +1,7 @@
 # Binaries
 /server
 /mock-server
+backend/server
 *.exe
 *.exe~
 *.dll

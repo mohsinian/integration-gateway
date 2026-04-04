@@ -31,6 +31,15 @@ services:
       SCRA_MIN_DELAY: "2"
       SCRA_MAX_DELAY: "5"
 
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     build:
       context: ./backend

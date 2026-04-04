@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mohsinian/integration-gateway/internal/store"
 )
 
 func main() {
@@ -35,6 +36,12 @@ func main() {
 		log.Fatalf("Unable to ping database: %v", err)
 	}
 	log.Println("Connected to PostgreSQL")
+
+	migrationsDir := envOr("MIGRATIONS_DIR", "migrations")
+	if err := store.RunMigrations(ctx, pool, migrationsDir); err != nil {
+		log.Fatalf("Migration error: %v", err)
+	}
+	log.Println("Migrations complete")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
