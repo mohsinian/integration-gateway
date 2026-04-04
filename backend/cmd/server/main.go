@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mohsinian/integration-gateway/internal/logger"
 	"github.com/mohsinian/integration-gateway/internal/store"
 )
 
@@ -18,6 +19,18 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// --- Logging -----------------------------------------------------------
+	logDir := envOr("LOG_DIR", "logs")
+	logs, err := logger.Init(logDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialise logging: %v\n", err)
+		os.Exit(1)
+	}
+	defer logs.Close()
+
+	log := logs.App // convenience alias for application-level logging
+
+	// --- Database ----------------------------------------------------------
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
 		envOr("DB_USER", "gateway"),
 		envOr("DB_PASSWORD", "gateway"),
@@ -28,29 +41,39 @@ func main() {
 
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v", err)
+		logs.Error.Error("unable to connect to database", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("Unable to ping database: %v", err)
+		logs.Error.Error("unable to ping database", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
-	log.Println("Connected to PostgreSQL")
+	log.Info("connected to PostgreSQL")
 
+	// --- Migrations --------------------------------------------------------
 	migrationsDir := envOr("MIGRATIONS_DIR", "migrations")
-	if err := store.RunMigrations(ctx, pool, migrationsDir); err != nil {
-		log.Fatalf("Migration error: %v", err)
+	if err := store.RunMigrations(ctx, pool, migrationsDir, log); err != nil {
+		logs.Error.Error("migration error", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
-	log.Println("Migrations complete")
+	log.Info("migrations complete")
 
+	// --- HTTP Server -------------------------------------------------------
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
+			logs.Server.Error("health check failed — db down",
+				slog.String("remote", r.RemoteAddr),
+				slog.String("error", err.Error()),
+			)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			fmt.Fprint(w, `{"status":"unhealthy","db":"down"}`)
 			return
 		}
+		logs.Server.Info("health check", slog.String("remote", r.RemoteAddr))
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"status":"healthy","db":"up"}`)
 	})
@@ -64,17 +87,21 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Server starting on %s", addr)
+		log.Info("server starting", slog.String("addr", addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			logs.Error.Error("server error", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	}()
 
 	<-ctx.Done()
-	log.Println("Shutting down...")
+	log.Info("shutting down...")
+
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	srv.Shutdown(shutdownCtx)
+
+	log.Info("server stopped")
 }
 
 func envOr(key, fallback string) string {

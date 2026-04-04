@@ -54,6 +54,9 @@ services:
       MOCK_PROPERTY_URL: http://mock-services:9001
       MOCK_COURT_URL: http://mock-services:9002
       MOCK_SCRA_URL: http://mock-services:9003
+      LOG_DIR: /app/logs
+    volumes:
+      - ./logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy

@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,7 +15,7 @@ import (
 // RunMigrations reads .sql files from dir and applies any that haven't been
 // recorded in schema_version yet. If a previously-run migration has status
 // "failed" the function returns an error — manual intervention required.
-func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
+func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string, log *slog.Logger) error {
 	// 1. Ensure schema_version table exists.
 	if _, err := pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_version (
 		id            SERIAL PRIMARY KEY,
@@ -43,7 +43,10 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 			for rows.Next() {
 				var fn, errMsg string
 				rows.Scan(&fn, &errMsg)
-				log.Printf("  FAILED: %s — %s", fn, errMsg)
+				log.Error("previously failed migration",
+					slog.String("file", fn),
+					slog.String("error", errMsg),
+				)
 			}
 		}
 		return fmt.Errorf("%d previously failed migration(s) — fix and retry manually", failedCount)
@@ -87,10 +90,10 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 	// 5. Run each pending migration inside a transaction.
 	for _, fn := range files {
 		if applied[fn] {
-			log.Printf("Skipping (already applied): %s", fn)
+			log.Info("skipping already applied migration", slog.String("file", fn))
 			continue
 		}
-		log.Printf("Running migration: %s", fn)
+		log.Info("running migration", slog.String("file", fn))
 
 		content, err := os.ReadFile(filepath.Join(dir, fn))
 		if err != nil {
@@ -109,6 +112,10 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 				fn, errMsg,
 			)
 			tx.Rollback(ctx)
+			log.Error("migration failed",
+				slog.String("file", fn),
+				slog.String("error", errMsg),
+			)
 			return fmt.Errorf("migration %s failed: %s", fn, errMsg)
 		}
 
@@ -123,7 +130,7 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("commit migration %s: %w", fn, err)
 		}
-		log.Printf("  OK: %s", fn)
+		log.Info("migration applied", slog.String("file", fn))
 	}
 
 	return nil

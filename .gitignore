@@ -38,3 +38,6 @@ pgdata/
 # Assignment markdowns
 backend_assignment.md
 PLAN.md
+
+# Logs
+logs/

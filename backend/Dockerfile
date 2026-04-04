@@ -10,5 +10,6 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 COPY --from=builder /server /app/server
 COPY --from=builder /app/migrations /app/migrations
+RUN mkdir -p /app/logs
 EXPOSE 8080
 CMD ["/app/server"]
