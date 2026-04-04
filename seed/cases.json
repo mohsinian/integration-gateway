@@ -1,0 +1,140 @@
+[
+  {
+    "id": "case-001",
+    "caseNumber": "2025-FC-04821",
+    "borrower": {
+      "firstName": "Elena",
+      "lastName": "Martinez",
+      "ssnLast4": "4521",
+      "dob": "1985-03-14"
+    },
+    "property": {
+      "address": "1422 W Diversey Pkwy, Chicago, IL 60614",
+      "county": "Cook",
+      "state": "IL",
+      "parcelId": "14-28-322-001-0000"
+    },
+    "loan": {
+      "number": "2019-0098765",
+      "servicer": "Chase",
+      "originalAmount": 385000.00
+    },
+    "currentStage": "title-search",
+    "courtCaseNumber": null
+  },
+  {
+    "id": "case-002",
+    "caseNumber": "2025-FC-07743",
+    "borrower": {
+      "firstName": "David",
+      "lastName": "Thompson",
+      "ssnLast4": "8832",
+      "dob": "1978-11-02"
+    },
+    "property": {
+      "address": "8830 SW 142nd St, Miami, FL 33176",
+      "county": "Miami-Dade",
+      "state": "FL",
+      "parcelId": "30-4017-001-0290"
+    },
+    "loan": {
+      "number": "2020-0145678",
+      "servicer": "Wells Fargo",
+      "originalAmount": 520000.00
+    },
+    "currentStage": "filing",
+    "courtCaseNumber": "2026-CA-003891"
+  },
+  {
+    "id": "case-003",
+    "caseNumber": "2025-FC-03198",
+    "borrower": {
+      "firstName": "Thanh",
+      "lastName": "Nguyen",
+      "ssnLast4": "7103",
+      "dob": "1990-07-22"
+    },
+    "property": {
+      "address": "4501 Kingwood Dr, Kingwood, TX 77345",
+      "county": "Harris",
+      "state": "TX",
+      "parcelId": "61-42-0100-0034"
+    },
+    "loan": {
+      "number": "2021-0234567",
+      "servicer": "Nationstar",
+      "originalAmount": 310000.00
+    },
+    "currentStage": "schedule-sale",
+    "courtCaseNumber": "2025-CV-18734"
+  },
+  {
+    "id": "case-004",
+    "caseNumber": "2025-FC-11023",
+    "borrower": {
+      "firstName": "Marcus",
+      "lastName": "Johnson",
+      "ssnLast4": "2209",
+      "dob": "1992-01-30"
+    },
+    "property": {
+      "address": "482 Atlantic Ave, Brooklyn, NY 11217",
+      "county": "Kings",
+      "state": "NY",
+      "parcelId": "00945-0012-0001"
+    },
+    "loan": {
+      "number": "2022-0345678",
+      "servicer": "Chase",
+      "originalAmount": 675000.00
+    },
+    "currentStage": "serve-borrower",
+    "courtCaseNumber": "2025-FC-11023"
+  },
+  {
+    "id": "case-005",
+    "caseNumber": "2025-FC-09901",
+    "borrower": {
+      "firstName": "Sarah",
+      "lastName": "Williams",
+      "ssnLast4": "5567",
+      "dob": "1970-04-18"
+    },
+    "property": {
+      "address": "3847 Pearl Rd, Cleveland, OH 44109",
+      "county": "Cuyahoga",
+      "state": "OH",
+      "parcelId": "004-14-097"
+    },
+    "loan": {
+      "number": "2018-0456789",
+      "servicer": "Wells Fargo",
+      "originalAmount": 195000.00
+    },
+    "currentStage": "title-search",
+    "courtCaseNumber": null
+  },
+  {
+    "id": "case-006",
+    "caseNumber": "2025-FC-06210",
+    "borrower": {
+      "firstName": "Vikram",
+      "lastName": "Patel",
+      "ssnLast4": "9914",
+      "dob": "1988-09-05"
+    },
+    "property": {
+      "address": "7720 Forest Ln, Dallas, TX 75230",
+      "county": "Dallas",
+      "state": "TX",
+      "parcelId": "CC-8821-000-0450"
+    },
+    "loan": {
+      "number": "2023-0567890",
+      "servicer": "Wells Fargo",
+      "originalAmount": 425000.00
+    },
+    "currentStage": "serve-borrower",
+    "courtCaseNumber": "2025-FC-09876"
+  }
+]

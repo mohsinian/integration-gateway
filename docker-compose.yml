@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mock-services:
+    build:
+      context: ./mock-services
+    ports:
+      - "9001:9001"
+      - "9002:9002"
+      - "9003:9003"
+    environment:
+      PROPERTY_FAIL_RATE: "0.25"
+      PROPERTY_SLOW_RATE: "0.10"
+      COURT_RATE_LIMIT: "2"
+      COURT_CORRUPT_RATE: "0.03"
+      SCRA_FAIL_RATE: "0.10"
+      SCRA_MIN_DELAY: "2"
+      SCRA_MAX_DELAY: "5"
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      MOCK_PROPERTY_URL: http://mock-services:9001
+      MOCK_COURT_URL: http://mock-services:9002
+      MOCK_SCRA_URL: http://mock-services:9003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-services:
+        condition: service_started
+
+volumes:
+  pgdata:
