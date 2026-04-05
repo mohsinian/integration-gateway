@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mohsinian/integration-gateway/internal/logger"
 	"github.com/mohsinian/integration-gateway/internal/store"
+	"github.com/mohsinian/integration-gateway/seed"
 )
 
 func main() {
@@ -59,6 +60,13 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("migrations complete")
+
+	// --- Seed ---------------------------------------------------------------
+	casesFile := envOr("CASES_FILE", "seed/cases.json")
+	if err := seed.Cases(ctx, pool, casesFile, log); err != nil {
+		logs.Error.Error("seed error", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
 	// --- HTTP Server -------------------------------------------------------
 	mux := http.NewServeMux()
