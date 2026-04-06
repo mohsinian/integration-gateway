@@ -11,7 +11,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mohsinian/integration-gateway/internal/api"
+	"github.com/mohsinian/integration-gateway/internal/client"
 	"github.com/mohsinian/integration-gateway/internal/logger"
+	"github.com/mohsinian/integration-gateway/internal/lookup"
+	"github.com/mohsinian/integration-gateway/internal/resilience"
 	"github.com/mohsinian/integration-gateway/internal/store"
 	"github.com/mohsinian/integration-gateway/seed"
 )
@@ -68,23 +72,46 @@ func main() {
 		os.Exit(1)
 	}
 
-	// --- HTTP Server -------------------------------------------------------
+	// --- Clients -----------------------------------------------------------
+	propertyClient := client.NewPropertyClient(
+		envOr("MOCK_PROPERTY_URL", "http://localhost:9001"),
+		logs.Server,
+	)
+	courtClient := client.NewCourtClient(
+		envOr("MOCK_COURT_URL", "http://localhost:9002"),
+		logs.Server,
+	)
+	scraClient := client.NewSCRAClient(
+		envOr("MOCK_SCRA_URL", "http://localhost:9003"),
+		logs.Server,
+	)
+
+	// --- Resilience --------------------------------------------------------
+	propertyCB := resilience.NewCircuitBreaker("property_records", 5, 30*time.Second)
+	courtCB := resilience.NewCircuitBreaker("court_records", 5, 30*time.Second)
+	scraCB := resilience.NewCircuitBreaker("scra", 5, 30*time.Second)
+	courtLimiter := resilience.NewRateLimiter(2) // 2 req/sec
+
+	// --- Store + Orchestrator ----------------------------------------------
+	lookupStore := store.NewLookupStore(pool)
+	orchestrator := lookup.NewOrchestrator(
+		lookupStore,
+		propertyClient, courtClient, scraClient,
+		propertyCB, courtCB, scraCB,
+		courtLimiter,
+		logs.Server, logs.Error,
+	)
+
+	// --- HTTP Handlers + Router --------------------------------------------
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		if err := pool.Ping(r.Context()); err != nil {
-			logs.Server.Error("health check failed — db down",
-				slog.String("remote", r.RemoteAddr),
-				slog.String("error", err.Error()),
-			)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusServiceUnavailable)
-			fmt.Fprint(w, `{"status":"unhealthy","db":"down"}`)
-			return
-		}
-		logs.Server.Info("health check", slog.String("remote", r.RemoteAddr))
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"healthy","db":"up"}`)
-	})
+	handler := api.NewHandler(
+		orchestrator,
+		lookupStore,
+		pool,
+		[]*resilience.CircuitBreaker{propertyCB, courtCB, scraCB},
+		logs,
+	)
+	handler.RegisterRoutes(mux)
 
 	addr := ":" + envOr("PORT", "8080")
 	srv := &http.Server{

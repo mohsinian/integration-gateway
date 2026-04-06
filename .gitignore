@@ -41,3 +41,6 @@ PLAN.md
 
 # Logs
 logs/
+
+# Claude Memory
+/memory
