@@ -15,7 +15,7 @@ No Go toolchain, no PostgreSQL, no local dependencies — everything runs inside
 
 ```bash
 # 1. Clone
-git clone https://github.com/mohsinian/integration-gateway.git
+git clone git@github.com:mohsinian/integration-gateway.git
 cd integration-gateway
 
 # 2. Configure environment
