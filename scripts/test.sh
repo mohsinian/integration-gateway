@@ -18,9 +18,6 @@ usage() {
     echo "  all          Run all unit test suites (default)"
     echo "  resilience   Retry, circuit breaker, rate limiter tests"
     echo "  client       Property, court, SCRA client tests"
-    echo "  store        Database / store tests"
-    echo "  lookup       Orchestrator tests"
-    echo "  api          HTTP handler tests"
     echo "  integration  Run integration tests via Docker (requires docker compose up)"
     echo ""
     echo -e "${CYAN}Options:${NC}"
@@ -41,22 +38,13 @@ resolve_packages() {
     local target="$1"
     case "$target" in
         all)
-            echo "./internal/resilience/" "./internal/client/" "./internal/store/" "./internal/lookup/" "./internal/api/"
+            echo "./internal/resilience/" "./internal/client/"
             ;;
         resilience)
             echo "./internal/resilience/"
             ;;
         client)
             echo "./internal/client/"
-            ;;
-        store)
-            echo "./internal/store/"
-            ;;
-        lookup)
-            echo "./internal/lookup/"
-            ;;
-        api)
-            echo "./internal/api/"
             ;;
         integration)
             echo "integration"
@@ -93,7 +81,7 @@ while [[ $# -gt 0 ]]; do
             RUN_FLAG="-run $2"
             shift 2
             ;;
-        resilience|client|store|lookup|api|integration|all)
+        resilience|client|integration|all)
             TARGET="$1"
             shift
             ;;
