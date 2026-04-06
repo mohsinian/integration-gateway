@@ -15,12 +15,13 @@ usage() {
     echo -e "${CYAN}Usage:${NC} $(basename "$0") [target] [options]"
     echo ""
     echo -e "${CYAN}Targets:${NC}"
-    echo "  all         Run all test suites (default)"
-    echo "  resilience  Retry, circuit breaker, rate limiter tests"
-    echo "  client      Property, court, SCRA client tests"
-    echo "  store       Database / store tests"
-    echo "  lookup      Orchestrator tests"
-    echo "  api         HTTP handler tests"
+    echo "  all          Run all unit test suites (default)"
+    echo "  resilience   Retry, circuit breaker, rate limiter tests"
+    echo "  client       Property, court, SCRA client tests"
+    echo "  store        Database / store tests"
+    echo "  lookup       Orchestrator tests"
+    echo "  api          HTTP handler tests"
+    echo "  integration  Run integration tests via Docker (requires docker compose up)"
     echo ""
     echo -e "${CYAN}Options:${NC}"
     echo "  -v, --verbose    Verbose output"
@@ -28,10 +29,11 @@ usage() {
     echo "  -h, --help       Show this help"
     echo ""
     echo -e "${CYAN}Examples:${NC}"
-    echo "  $(basename "$0")                    # run all tests"
-    echo "  $(basename "$0") resilience         # resilience layer only"
-    echo "  $(basename "$0") client -v          # client tests, verbose"
-    echo "  $(basename "$0") all -run TestDo_   # only TestDo_* across all packages"
+    echo "  $(basename "$0")                           # run all unit tests"
+    echo "  $(basename "$0") resilience                # resilience layer only"
+    echo "  $(basename "$0") client -v                 # client tests, verbose"
+    echo "  $(basename "$0") integration               # integration tests via Docker"
+    echo "  $(basename "$0") integration -run Bulk     # only Bulk* integration tests"
 }
 
 # Resolve which package(s) to test.
@@ -55,6 +57,9 @@ resolve_packages() {
             ;;
         api)
             echo "./internal/api/"
+            ;;
+        integration)
+            echo "integration"
             ;;
         *)
             echo -e "${RED}Unknown target: $target${NC}" >&2
@@ -88,7 +93,7 @@ while [[ $# -gt 0 ]]; do
             RUN_FLAG="-run $2"
             shift 2
             ;;
-        resilience|client|store|lookup|api|all)
+        resilience|client|store|lookup|api|integration|all)
             TARGET="$1"
             shift
             ;;
@@ -104,14 +109,40 @@ done
 
 cd "$BACKEND_DIR"
 
+# ── Integration tests (via Docker) ─────────────────────────────────────────
+
+if [[ "$TARGET" == "integration" ]]; then
+    echo -e "${CYAN}── Running integration tests via Docker ──${NC}"
+    echo ""
+
+    # Verify Docker services are up.
+    if ! docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps --status running -q 2>/dev/null | grep -q .; then
+        echo -e "${RED}Docker services are not running. Run scripts/up.sh first.${NC}" >&2
+        exit 1
+    fi
+
+    docker compose -f "$PROJECT_ROOT/docker-compose.yml" \
+        run --rm test \
+        go test -tags=integration $VERBOSE $RUN_FLAG -timeout 150s ./internal/lookup/
+
+    echo ""
+    echo -e "${GREEN}Integration tests passed.${NC}"
+    exit 0
+fi
+
+# ── Unit tests ─────────────────────────────────────────────────────────────
+
 PACKAGES=($(resolve_packages "$TARGET"))
 
-# Filter to packages that actually exist.
+# Filter to packages that have unit test files (exclude integration-only).
 EXISTING=()
 for pkg in "${PACKAGES[@]}"; do
-    if ls "$pkg"*_test.go &>/dev/null; then
-        EXISTING+=("$pkg")
-    fi
+    for f in "$pkg"*_test.go; do
+        if [[ -f "$f" ]] && ! grep -q '//go:build integration' "$f"; then
+            EXISTING+=("$pkg")
+            break
+        fi
+    done
 done
 
 if [[ ${#EXISTING[@]} -eq 0 ]]; then

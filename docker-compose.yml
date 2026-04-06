@@ -63,5 +63,26 @@ services:
       mock-services:
         condition: service_started
 
+  test:
+    build:
+      context: ./backend
+      target: builder
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      MOCK_PROPERTY_URL: http://mock-services:9001
+      MOCK_COURT_URL: http://mock-services:9002
+      MOCK_SCRA_URL: http://mock-services:9003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-services:
+        condition: service_started
+    profiles:
+      - test
+
 volumes:
   pgdata:

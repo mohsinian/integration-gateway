@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -42,8 +43,9 @@ func NewHandler(
 
 // RegisterRoutes registers all API endpoints on the given mux using Go 1.22+ patterns.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/cases/{id}/lookup", h.LookupCase)
-	mux.HandleFunc("GET /api/cases/{id}/status", h.GetLookupStatus)
+	mux.HandleFunc("POST /api/cases/{id}/enrich", h.LookupCase)
+	mux.HandleFunc("POST /api/enrich/bulk", h.BulkEnrich)
+	mux.HandleFunc("GET /api/cases/{id}/enrichment", h.GetLookupStatus)
 	mux.HandleFunc("GET /api/cases", h.ListCases)
 	mux.HandleFunc("GET /api/health", h.Health)
 }
@@ -52,7 +54,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 // Handlers
 // ---------------------------------------------------------------------------
 
-// LookupCase handles POST /api/cases/{id}/lookup.
+// LookupCase handles POST /api/cases/{id}/enrich.
 func (h *Handler) LookupCase(w http.ResponseWriter, r *http.Request) {
 	caseID := r.PathValue("id")
 	if caseID == "" {
@@ -82,7 +84,7 @@ func (h *Handler) LookupCase(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, statusCode, buildStatusResponse(result))
 }
 
-// GetLookupStatus handles GET /api/cases/{id}/status.
+// GetLookupStatus handles GET /api/cases/{id}/enrichment.
 func (h *Handler) GetLookupStatus(w http.ResponseWriter, r *http.Request) {
 	caseID := r.PathValue("id")
 	if caseID == "" {
@@ -190,6 +192,85 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 		Status:          overall,
 		DB:              dbStatus,
 		CircuitBreakers: cbStatus,
+	})
+}
+
+// BulkEnrich handles POST /api/enrich/bulk.
+// Accepts {"caseIds": ["case-001", "case-002", ...]}, triggers enrichment for each
+// with a worker pool of 3 (matching the number of sources to respect the court rate limiter).
+// Returns 202 with per-case status immediately — enrichment is async.
+func (h *Handler) BulkEnrich(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		CaseIDs []string `json:"caseIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
+		return
+	}
+	if len(req.CaseIDs) == 0 {
+		h.writeJSON(w, http.StatusBadRequest, errorResponse{Error: "caseIds must not be empty"})
+		return
+	}
+
+	type caseResult struct {
+		CaseID string `json:"caseId"`
+		Status string `json:"status"` // "triggered", "complete", "pending", "error"
+		Error  string `json:"error,omitempty"`
+	}
+
+	results := make([]caseResult, len(req.CaseIDs))
+	var mu sync.Mutex
+
+	// Worker pool: 3 concurrent lookups (court rate limiter is 2/sec, so 3 workers
+	// keeps throughput up without overwhelming it).
+	workers := 3
+	if len(req.CaseIDs) < workers {
+		workers = len(req.CaseIDs)
+	}
+
+	jobs := make(chan int, len(req.CaseIDs))
+	var wg sync.WaitGroup
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				caseID := req.CaseIDs[idx]
+				_, code, err := h.orchestrator.TriggerLookup(caseID)
+
+				mu.Lock()
+				cr := caseResult{CaseID: caseID}
+				if err != nil {
+					cr.Status = "error"
+					cr.Error = err.Error()
+				} else {
+					switch code {
+					case 200:
+						cr.Status = "complete"
+					case 202:
+						cr.Status = "triggered"
+					}
+				}
+				results[idx] = cr
+				mu.Unlock()
+			}
+		}()
+	}
+
+	for i := range req.CaseIDs {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+
+	h.logs.Server.Info("bulk enrich triggered",
+		slog.Int("cases", len(req.CaseIDs)),
+	)
+
+	h.writeJSON(w, http.StatusAccepted, map[string]any{
+		"triggered": len(req.CaseIDs),
+		"cases":     results,
 	})
 }
 
